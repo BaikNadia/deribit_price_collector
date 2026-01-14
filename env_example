@@ -1,0 +1,15 @@
+# Database
+DB_HOST=
+DB_PORT=
+DB_NAME=
+DB_USER=
+DB_PASS=
+
+# Celery / Redis
+REDIS_URL=r
+CELERY_BROKER_URL=
+CELERY_RESULT_BACKEND=
+
+# Deribit (опционально, для приватных эндпоинтов)
+DERIBIT_CLIENT_ID=
+DERIBIT_CLIENT_SECRET=
