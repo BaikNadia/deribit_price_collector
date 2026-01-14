@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 sys.path.append('.')
 
 from app.db.session import  get_db
-from app.db.models import PriceTick
+from app.db.models import Price
 
 app = FastAPI(title="Deribit Price Collector", version="1.0.0")
 
@@ -25,9 +25,9 @@ def get_all_prices(
         db: Session = Depends(get_db)
 ):
     """Получение всех сохраненных данных по указанной валюте"""
-    prices = db.query(PriceTick) \
-        .filter(PriceTick.ticker == ticker) \
-        .order_by(PriceTick.timestamp.desc()) \
+    prices = db.query(Price) \
+        .filter(Price.ticker == ticker) \
+        .order_by(Price.timestamp.desc()) \
         .offset(skip) \
         .limit(limit) \
         .all()
@@ -51,9 +51,9 @@ def get_latest_price(
         db: Session = Depends(get_db)
 ):
     """Получение последней цены валюты"""
-    price = db.query(PriceTick) \
-        .filter(PriceTick.ticker == ticker) \
-        .order_by(PriceTick.timestamp.desc()) \
+    price = db.query(Price) \
+        .filter(Price.ticker == ticker) \
+        .order_by(Price.timestamp.desc()) \
         .first()
 
     if not price:

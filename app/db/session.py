@@ -21,3 +21,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# Импортируем модели для Alembic
+# Этот импорт должен быть в конце файла, после определения Base
+from app.db import models  # noqa
