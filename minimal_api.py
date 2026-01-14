@@ -76,20 +76,33 @@ async def get_prices(
 
         result = []
         for price in prices:
-            # Отладочная информация
-            print(
-                f"DEBUG: Price record - instrument: {price.instrument_name}, price: {price.price}, time: {price.timestamp}")
+            # Извлекаем данные из additional_data
+            additional = price.additional_data or {}
+            stats = additional.get('stats', {})
+
+            # Используем правильное время из API
+            api_timestamp = additional.get('timestamp')
+            if api_timestamp:
+                # Конвертируем из миллисекунд
+                from datetime import datetime
+                time_value = datetime.fromtimestamp(api_timestamp / 1000).isoformat()
+            else:
+                time_value = price.timestamp.isoformat() if price.timestamp else datetime.now().isoformat()
+
+            # Извлекаем объем и изменение цены
+            volume = stats.get('volume', 0)
+            price_change = stats.get('price_change', 0)  # Процентное изменение
 
             result.append({
-                "time": price.timestamp.isoformat() if price.timestamp else datetime.now().isoformat(),
+                "time": time_value,
                 "instrument": price.instrument_name,
                 "price": float(price.price) if price.price else 0,
-                "24h_change": 0.0,  # У вас нет этого поля в модели
-                "volume": float(price.volume) if price.volume else 0.0,
+                "24h_change": float(price_change),  # Теперь реальные данные!
+                "volume": float(volume),  # Теперь реальные данные!
                 "source": price.source if price.source else "deribit"
             })
 
-        print(f"DEBUG: Returning {len(result)} price records")
+        print(f"DEBUG: Returning {len(result)} price records with real data")
 
         return {
             "data": result,

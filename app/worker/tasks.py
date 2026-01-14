@@ -4,6 +4,7 @@ from app.db.session import SessionLocal
 from app.db.models import Price
 import asyncio
 from datetime import datetime
+import time
 import logging
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,14 @@ def fetch_and_store_prices():
             logger.warning("⚠️ No prices received from Deribit")
             return {"status": "no_data", "records": 0}
 
+        # Для отладки: выводим структуру данных
+        for instrument_name, data in prices.items():
+            if data:
+                logger.debug(f"📋 Data for {instrument_name}:")
+                logger.debug(f"  Available keys: {list(data.keys())}")
+                if 'stats' in data:
+                    logger.debug(f"  Stats keys: {list(data['stats'].keys())}")
+
         # Сохраняем в БД
         db = SessionLocal()
         try:
@@ -43,16 +52,36 @@ def fetch_and_store_prices():
             for instrument_name, data in prices.items():
                 if data and "mark_price" in data:
                     price_value = data.get("mark_price")
+
+                    # Извлекаем дополнительные данные
+                    stats = data.get("stats", {})
+                    volume_usd = stats.get("volume_usd", 0)
+                    volume_eth = stats.get("volume", 0)
+                    price_change = stats.get("price_change", 0)
+
+                    # Получаем время из API (если есть)
+                    api_timestamp = data.get("timestamp")
+                    if api_timestamp:
+                        # API возвращает время в миллисекундах
+                        record_timestamp = datetime.fromtimestamp(api_timestamp / 1000)
+                    else:
+                        record_timestamp = datetime.utcnow()
+
+                    # Логируем для отладки
                     logger.info(f"💾 Saving {instrument_name}: ${price_value:,.2f}")
+                    logger.debug(f"  Volume USD: ${volume_usd:,.2f}")
+                    logger.debug(f"  Volume ETH: {volume_eth:,.2f}")
+                    logger.debug(f"  24h Change: {price_change:.2f}%")
+                    logger.debug(f"  Timestamp: {record_timestamp}")
 
                     price_record = Price(
                         instrument_name=instrument_name,
                         price=price_value,
-                        mark_iv=data.get("mark_iv"),
-                        volume=data.get("volume_usd"),
-                        timestamp=datetime.utcnow(),
+                        mark_iv=data.get("mark_iv"),  # Волатильность, если есть
+                        volume=volume_usd,  # Объем в USD
+                        timestamp=record_timestamp,  # Время из API
                         source="deribit",
-                        additional_data=data
+                        additional_data=data  # Сохраняем все данные
                     )
                     db.add(price_record)
                     count += 1
@@ -60,10 +89,16 @@ def fetch_and_store_prices():
             db.commit()
             logger.info(f"✅ SUCCESS: Saved {count} price records")
 
-            # Логируем сохраненные цены
+            # Логируем сохраненные цены с деталями
             for instrument_name, data in prices.items():
                 if data and "mark_price" in data:
-                    logger.info(f"   📍 {instrument_name}: ${data['mark_price']:,.2f}")
+                    stats = data.get("stats", {})
+                    logger.info(
+                        f"   📍 {instrument_name}: "
+                        f"${data['mark_price']:,.2f} | "
+                        f"24h Δ: {stats.get('price_change', 0):+.2f}% | "
+                        f"Vol: ${stats.get('volume_usd', 0):,.0f}"
+                    )
 
             return {"status": "success", "records": count}
 
