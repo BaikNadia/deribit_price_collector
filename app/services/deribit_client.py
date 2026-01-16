@@ -1,10 +1,12 @@
-import aiohttp
 import asyncio
-from typing import Dict, Any, Optional, List
-from app.core.config import settings
-import logging
 import json
+import logging
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import aiohttp
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +31,9 @@ class DeribitClient:
             self._session = aiohttp.ClientSession(
                 timeout=self.timeout,
                 headers={
-                    'User-Agent': 'DeribitPriceCollector/1.0',
-                    'Accept': 'application/json'
-                }
+                    "User-Agent": "DeribitPriceCollector/1.0",
+                    "Accept": "application/json",
+                },
             )
         return self._session
 
@@ -51,7 +53,9 @@ class DeribitClient:
         try:
             session = await self._get_session()
             async with session.get(url, params=params) as response:
-                logger.debug(f"Response status for {instrument_name}: {response.status}")
+                logger.debug(
+                    f"Response status for {instrument_name}: {response.status}"
+                )
 
                 if response.status == 200:
                     # Получаем текст ответа
@@ -67,12 +71,16 @@ class DeribitClient:
 
                     except json.JSONDecodeError as e:
                         logger.error(f"JSON decode error for {instrument_name}: {e}")
-                        logger.debug(f"Raw response (first 500 chars): {response_text[:500]}")
+                        logger.debug(
+                            f"Raw response (first 500 chars): {response_text[:500]}"
+                        )
                         return None
 
                     # Проверяем структуру ответа
                     if "result" not in data:
-                        logger.warning(f"No 'result' field in response for {instrument_name}")
+                        logger.warning(
+                            f"No 'result' field in response for {instrument_name}"
+                        )
                         logger.debug(f"Full response: {data}")
                         return None
 
@@ -83,7 +91,9 @@ class DeribitClient:
                         return None
 
                     if not isinstance(result, dict):
-                        logger.warning(f"Result is not a dict for {instrument_name}: {type(result)}")
+                        logger.warning(
+                            f"Result is not a dict for {instrument_name}: {type(result)}"
+                        )
                         return None
 
                     # Добавляем timestamp если его нет
@@ -111,7 +121,9 @@ class DeribitClient:
 
                 else:
                     text = await response.text() if response.status != 200 else ""
-                    logger.error(f"❌ API error for {instrument_name}: {response.status} - {text[:200]}")
+                    logger.error(
+                        f"❌ API error for {instrument_name}: {response.status} - {text[:200]}"
+                    )
                     return None
 
         except asyncio.TimeoutError:
@@ -123,12 +135,15 @@ class DeribitClient:
         except Exception as e:
             logger.error(f"💥 Unexpected error fetching {instrument_name}: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
             return None
 
     async def get_multiple_tickers(self, instruments: List[str]) -> Dict[str, Any]:
         """Получение цен для нескольких инструментов"""
-        logger.info(f"📊 Fetching prices for {len(instruments)} instruments: {instruments}")
+        logger.info(
+            f"📊 Fetching prices for {len(instruments)} instruments: {instruments}"
+        )
 
         if not instruments:
             logger.warning("⚠️ No instruments provided")
@@ -145,8 +160,7 @@ class DeribitClient:
         # Выполняем параллельно с таймаутом
         try:
             results = await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True),
-                timeout=30
+                asyncio.gather(*tasks, return_exceptions=True), timeout=30
             )
         except asyncio.TimeoutError:
             logger.error("⏰ Timeout fetching multiple tickers")
@@ -187,13 +201,15 @@ class DeribitClient:
 
         return prices
 
-    async def get_instruments(self, currency: str = "BTC", kind: str = "future") -> List[str]:
+    async def get_instruments(
+        self, currency: str = "BTC", kind: str = "future"
+    ) -> List[str]:
         """Получение списка доступных инструментов"""
         url = f"{self.base_url}/api/v2/public/get_instruments"
         params = {
             "currency": currency,
             "kind": kind,
-            "expired": "false"  # Только активные инструменты
+            "expired": "false",  # Только активные инструменты
         }
 
         logger.info(f"🔍 Getting instruments for {currency} ({kind})")
@@ -223,7 +239,9 @@ class DeribitClient:
                     return instruments
                 else:
                     text = await response.text()
-                    logger.error(f"Error getting instruments: {response.status} - {text}")
+                    logger.error(
+                        f"Error getting instruments: {response.status} - {text}"
+                    )
                     return []
         except asyncio.TimeoutError:
             logger.error("Timeout getting instruments")
@@ -261,8 +279,9 @@ class DeribitClient:
 # Утилита для быстрого тестирования
 async def test_deribit_client():
     """Тестирование клиента"""
-    import sys
     import os
+    import sys
+
     sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
     from app.core.config import settings
@@ -275,10 +294,14 @@ async def test_deribit_client():
         print("\n1. Testing single instrument...")
         btc_data = await client.get_public_ticker("BTC-PERPETUAL")
         if btc_data:
-            print(f"✅ BTC-PERPETUAL data received")
+            print("✅ BTC-PERPETUAL data received")
             print(f"   Price: ${btc_data.get('mark_price', 'N/A'):,.2f}")
-            print(f"   24h Change: {btc_data.get('stats', {}).get('price_change', 0):+.2f}%")
-            print(f"   24h Volume: ${btc_data.get('stats', {}).get('volume_usd', 0):,.0f}")
+            print(
+                f"   24h Change: {btc_data.get('stats', {}).get('price_change', 0):+.2f}%"
+            )
+            print(
+                f"   24h Volume: ${btc_data.get('stats', {}).get('volume_usd', 0):,.0f}"
+            )
         else:
             print("❌ Failed to get BTC data")
 
@@ -302,6 +325,7 @@ async def test_deribit_client():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
     finally:
         await client.close()

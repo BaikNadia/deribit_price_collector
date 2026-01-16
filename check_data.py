@@ -1,12 +1,14 @@
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.getcwd())
 
-from app.db.session import SessionLocal
-from app.db.models import Price
-from sqlalchemy import desc, func
 from datetime import datetime, timedelta
+
+from sqlalchemy import desc, func
+
+from app.db.models import Price
+from app.db.session import SessionLocal
 
 db = SessionLocal()
 try:
@@ -30,21 +32,29 @@ try:
         # Статистика по инструментам
         print("\n📊 Статистика по инструментам:")
         print("-" * 60)
-        stats = db.query(
-            Price.instrument_name,
-            func.count(Price.id).label('count'),
-            func.min(Price.timestamp).label('first'),
-            func.max(Price.timestamp).label('last'),
-            func.min(Price.price).label('min_price'),
-            func.max(Price.price).label('max_price'),
-            func.avg(Price.price).label('avg_price')
-        ).group_by(Price.instrument_name).all()
+        stats = (
+            db.query(
+                Price.instrument_name,
+                func.count(Price.id).label("count"),
+                func.min(Price.timestamp).label("first"),
+                func.max(Price.timestamp).label("last"),
+                func.min(Price.price).label("min_price"),
+                func.max(Price.price).label("max_price"),
+                func.avg(Price.price).label("avg_price"),
+            )
+            .group_by(Price.instrument_name)
+            .all()
+        )
 
         for stat in stats:
             print(f"{stat.instrument_name:15}:")
             print(f"  Количество: {stat.count}")
-            print(f"  Период: {stat.first.strftime('%H:%M')} - {stat.last.strftime('%H:%M')}")
-            print(f"  Цена: ${stat.min_price:.2f} - ${stat.max_price:.2f} (avg: ${stat.avg_price:.2f})")
+            print(
+                f"  Период: {stat.first.strftime('%H:%M')} - {stat.last.strftime('%H:%M')}"
+            )
+            print(
+                f"  Цена: ${stat.min_price:.2f} - ${stat.max_price:.2f} (avg: ${stat.avg_price:.2f})"
+            )
             print()
 
     else:
