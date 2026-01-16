@@ -67,7 +67,7 @@ redis-server --version
 ### 2. Клонирование репозитория
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/BaikNadia/deribit_price_collector.git
 cd deribit_price_collector
 ```
 
