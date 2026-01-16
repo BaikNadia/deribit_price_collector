@@ -1,11 +1,12 @@
-from app.worker.celery_app import celery_app
-from app.services.deribit_client import DeribitClient
-from app.db.session import SessionLocal
-from app.db.models import Price
 import asyncio
-from datetime import datetime
-import time
 import logging
+import time
+from datetime import datetime
+
+from app.db.models import Price
+from app.db.session import SessionLocal
+from app.services.deribit_client import DeribitClient
+from app.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ def fetch_and_store_prices():
             if data:
                 logger.debug(f"📋 Data for {instrument_name}:")
                 logger.debug(f"  Available keys: {list(data.keys())}")
-                if 'stats' in data:
+                if "stats" in data:
                     logger.debug(f"  Stats keys: {list(data['stats'].keys())}")
 
         # Сохраняем в БД
@@ -81,7 +82,7 @@ def fetch_and_store_prices():
                         volume=volume_usd,  # Объем в USD
                         timestamp=record_timestamp,  # Время из API
                         source="deribit",
-                        additional_data=data  # Сохраняем все данные
+                        additional_data=data,  # Сохраняем все данные
                     )
                     db.add(price_record)
                     count += 1
@@ -106,6 +107,7 @@ def fetch_and_store_prices():
             db.rollback()
             logger.error(f"❌ ERROR saving prices: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
             return {"status": "error", "error": str(e)}
         finally:
@@ -121,5 +123,6 @@ def fetch_and_store_prices():
     except Exception as e:
         logger.error(f"💥 FATAL ERROR in task: {e}")
         import traceback
+
         logger.error(traceback.format_exc())
         return {"status": "fatal_error", "error": str(e)}
