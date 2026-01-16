@@ -1,5 +1,6 @@
-from pydantic import BaseModel
 from datetime import datetime
+
+from pydantic import BaseModel
 
 
 class PriceTickBase(BaseModel):
@@ -7,8 +8,10 @@ class PriceTickBase(BaseModel):
     price: float
     timestamp: int
 
+
 class PriceTickCreate(PriceTickBase):
     pass
+
 
 class PriceTick(PriceTickBase):
     id: int
@@ -17,9 +20,5 @@ class PriceTick(PriceTickBase):
     class Config:
         from_attributes = True
         schema_extra = {
-            "example": {
-                "ticker": "btc_usd",
-                "price": 45000.50,
-                "timestamp": 1678886400
-            }
+            "example": {"ticker": "btc_usd", "price": 45000.50, "timestamp": 1678886400}
         }

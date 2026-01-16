@@ -1,0 +1,5 @@
+[flake8]
+ignore = E501,E402,F401,F403,W503,E203,E266,E741,C901
+max-line-length = 88
+exclude = .venv,__pycache__,migrations,static,media,*.pyc,*.pyo,*.egg,.git,.hg,.svn,.tox,.eggs,build,dist,docs
+format = default

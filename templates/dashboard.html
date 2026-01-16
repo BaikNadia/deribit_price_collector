@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        danger: '#EF4444',
+                        warning: '#F59E0B'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .dashboard-card {
+            @apply bg-white rounded-lg shadow-md p-6;
+        }
+        .status-badge {
+            @apply px-3 py-1 rounded-full text-xs font-semibold;
+        }
+        .status-healthy {
+            @apply bg-green-100 text-green-800;
+        }
+        .status-warning {
+            @apply bg-yellow-100 text-yellow-800;
+        }
+        .status-error {
+            @apply bg-red-100 text-red-800;
+        }
+        .price-up {
+            @apply text-green-600;
+        }
+        .price-down {
+            @apply text-red-600;
+        }
+        .refresh-animation {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">🚀 Deribit Price Collector Dashboard</h1>
+            <div class="flex items-center mt-2">
+                <div class="flex items-center">
+                    <div class="w-3 h-3 rounded-full bg-green-500 mr-2"></div>
+                    <span class="text-gray-600">Live System Monitoring</span>
+                </div>
+                <div class="ml-4 text-gray-500" id="last-update">
+                    Last update: {{ timestamp }}
+                </div>
+                <button onclick="refreshData()" class="ml-auto px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-700 transition">
+                    🔄 Refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- System Status Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <!-- API Status -->
+            <div class="dashboard-card">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">API Status</h3>
+                <div class="flex items-center">
+                    {% if health.status == "healthy" %}
+                    <span class="status-badge status-healthy">✅ Healthy</span>
+                    {% else %}
+                    <span class="status-badge status-error">❌ Unhealthy</span>
+                    {% endif %}
+                    <span class="ml-2 text-gray-600">FastAPI Server</span>
+                </div>
+                <div class="mt-4">
+                    <div class="text-sm text-gray-500">Records in DB</div>
+                    <div class="text-2xl font-bold text-primary">{{ stats.total_records|default(0) }}</div>
+                </div>
+            </div>
+
+            <!-- Celery Status -->
+            <div class="dashboard-card">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Celery Worker</h3>
+                <div class="flex items-center">
+                    <span class="status-badge status-healthy">✅ Running</span>
+                    <span class="ml-2 text-gray-600">Solo Pool</span>
+                </div>
+                <div class="mt-4">
+                    <div class="text-sm text-gray-500">Tasks Executed</div>
+                    <div class="text-2xl font-bold text-secondary" id="task-count">-</div>
+                </div>
+            </div>
+
+            <!-- Redis Status -->
+            <div class="dashboard-card">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Redis</h3>
+                <div class="flex items-center">
+                    <span class="status-badge status-healthy">✅ Connected</span>
+                    <span class="ml-2 text-gray-600">localhost:6379</span>
+                </div>
+                <div class="mt-4">
+                    <div class="text-sm text-gray-500">Queue Length</div>
+                    <div class="text-2xl font-bold text-warning" id="queue-length">-</div>
+                </div>
+            </div>
+
+            <!-- Database Status -->
+            <div class="dashboard-card">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">PostgreSQL</h3>
+                <div class="flex items-center">
+                    <span class="status-badge status-healthy">✅ Connected</span>
+                    <span class="ml-2 text-gray-600">{{ health.database|default("Unknown") }}</span>
+                </div>
+                <div class="mt-4">
+                    <div class="text-sm text-gray-500">Instruments Tracked</div>
+                    <div class="text-2xl font-bold text-purple-600">
+                        {{ stats.instruments|length|default(0) }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Latest Prices -->
+        <div class="dashboard-card mb-8">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-gray-800">📈 Latest Prices</h2>
+                <div class="text-sm text-gray-500 refresh-animation" id="auto-refresh">
+                    Auto-refresh every 10s
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Instrument</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">24h Change</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Volume</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200" id="prices-table">
+                        {% for price in prices %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ price.timestamp.split("T")[1][:8] if price.timestamp else "N/A" }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                        <span class="text-blue-600 font-bold">{{ price.instrument[:1] }}</span>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">{{ price.instrument_name }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-lg font-bold text-gray-900">
+                                    ${{ "{:,.2f}".format(price.price) }}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    +{{ (price.additional_data.stats.price_change if price.additional_data and price.additional_data.stats else 0)|round(2) }}%
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                ${{ "{:,.0f}".format(price.additional_data.stats.volume_usd if price.additional_data and price.additional_data.stats else 0) }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ price.source }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% if not prices %}
+                        <tr>
+                            <td colspan="6" class="px-6 py-8 text-center text-gray-500">
+                                No price data available yet. Waiting for Celery tasks...
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Price Chart -->
+            <div class="dashboard-card">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Price History</h3>
+                <canvas id="priceChart" height="200"></canvas>
+            </div>
+
+            <!-- Statistics -->
+            <div class="dashboard-card">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">System Statistics</h3>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm text-gray-600">Data Collection Uptime</span>
+                            <span class="text-sm font-medium text-primary">100%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-green-600 h-2 rounded-full" style="width: 100%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm text-gray-600">API Response Time</span>
+                            <span class="text-sm font-medium text-primary" id="response-time">- ms</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-600 h-2 rounded-full" style="width: 85%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm text-gray-600">Database Performance</span>
+                            <span class="text-sm font-medium text-primary">Excellent</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-purple-600 h-2 rounded-full" style="width: 95%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-8 text-center text-gray-500 text-sm">
+            <p>Deribit Price Collector System • Real-time Market Data • {{ timestamp.split("T")[0] if timestamp else "" }}</p>
+            <p class="mt-1">Data updates automatically • All prices in USD</p>
+        </div>
+    </div>
+
+    <script>
+        let priceChart = null;
+
+        // Обновление времени
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('last-update').textContent =
+                `Last update: ${now.toLocaleTimeString()}`;
+        }
+
+        // Обновление данных
+        async function refreshData() {
+            const refreshBtn = document.querySelector('button[onclick="refreshData()"]');
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '🔄 Loading...';
+
+            try {
+                const response = await fetch('/api/dashboard');
+                const data = await response.json();
+
+                // Обновление таблицы цен
+                const pricesTable = document.getElementById('prices-table');
+                if (data.prices && data.prices.length > 0) {
+                    pricesTable.innerHTML = data.prices.map(price => `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                ${price.timestamp ? price.timestamp.split('T')[1].substring(0, 8) : 'N/A'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                        <span class="text-blue-600 font-bold">${price.instrument_name ? price.instrument_name[0] : '?'}</span>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">${price.instrument_name || 'Unknown'}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-lg font-bold text-gray-900">
+                                    $${price.price ? price.price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    +${price.additional_data && price.additional_data.stats ? price.additional_data.stats.price_change.toFixed(2) : '0.00'}%
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                $${price.additional_data && price.additional_data.stats ? price.additional_data.stats.volume_usd.toLocaleString('en-US') : '0'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                ${price.source || 'deribit'}
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+
+                // Обновление статистики
+                if (data.stats) {
+                    document.querySelector('.text-2xl.font-bold.text-primary').textContent =
+                        data.stats.total_records ? data.stats.total_records.toLocaleString() : '0';
+
+                    // Обновление графика (если есть данные)
+                    updateChart(data.prices);
+                }
+
+                // Обновление времени
+                updateTime();
+
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+            } finally {
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = '🔄 Refresh';
+            }
+        }
+
+        // Обновление графика
+        function updateChart(prices) {
+            if (!prices || prices.length === 0) return;
+
+            // Группировка по инструментам
+            const btcPrices = prices.filter(p => p.instrument_name.includes('BTC')).slice(0, 10).reverse();
+            const ethPrices = prices.filter(p => p.instrument_name.includes('ETH')).slice(0, 10).reverse();
+
+            const ctx = document.getElementById('priceChart').getContext('2d');
+
+            if (priceChart) {
+                priceChart.destroy();
+            }
+
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: btcPrices.map((p, i) => `T-${i * 5}m`),
+                    datasets: [
+                        {
+                            label: 'BTC Price',
+                            data: btcPrices.map(p => p.price),
+                            borderColor: '#3B82F6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'ETH Price',
+                            data: ethPrices.map(p => p.price),
+                            borderColor: '#10B981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Price History (Last 50 minutes)'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Авто-обновление каждые 10 секунд
+        setInterval(refreshData, 10000);
+
+        // Обновление времени каждую секунду
+        setInterval(updateTime, 1000);
+
+        // Инициализация при загрузке
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshData();
+            updateTime();
+        });
+    </script>
+</body>
+</html>

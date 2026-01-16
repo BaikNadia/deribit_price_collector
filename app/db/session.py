@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import declarative_base, sessionmaker
+
 from app.core.config import settings
 
 # Используем DATABASE_URL из настроек
@@ -14,6 +15,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Базовый класс для моделей
 Base = declarative_base()
 
+
 # Функция для получения сессии (для зависимостей FastAPI)
 def get_db():
     db = SessionLocal()
@@ -21,3 +23,8 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+# Импортируем модели для Alembic
+# Этот импорт должен быть в конце файла, после определения Base
+from app.db import models  # noqa
